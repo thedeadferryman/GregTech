@@ -18,8 +18,8 @@ import java.util.*;
 public class FluidTankList implements IFluidHandler, IMultipleTankHandler, INBTSerializable<NBTTagCompound> {
 
     protected final List<IFluidTank> fluidTanks;
-    protected IFluidTankProperties[] properties;
     protected final boolean allowSameFluidFill;
+    protected IFluidTankProperties[] properties;
     private IFluidTankProperties[] fluidTankProperties;
 
     public FluidTankList(boolean allowSameFluidFill, IFluidTank... fluidTanks) {
@@ -56,6 +56,22 @@ public class FluidTankList implements IFluidHandler, IMultipleTankHandler, INBTS
     @Override
     public IFluidTank getTankAt(int index) {
         return fluidTanks.get(index);
+    }
+
+    @Override
+    public boolean allowSameFluidFill() {
+        return allowSameFluidFill;
+    }
+
+    @Override
+    public int getIndexOfFluid(FluidStack resource) {
+        for (int i = 0; i < fluidTanks.size(); i++) {
+            FluidStack tankStack = fluidTanks.get(i).getFluid();
+            if (tankStack != null && tankStack.isFluidEqual(resource)) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     @Override

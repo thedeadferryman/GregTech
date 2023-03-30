@@ -69,7 +69,7 @@ val git: Git = Git.open(projectDir)
 val modVersion = getVersionFromJava(file("src/main/java/gregtech/GregTechVersion.java"))
 val modVersionNoBuild = modVersion.substring(0, modVersion.lastIndexOf('.'))
 version = "$mcVersion-$modVersion"
-group = "gregtech"
+group = "gregtech.ch"
 
 configure<BasePluginConvention> {
     archivesBaseName = "gregtech"
@@ -148,7 +148,7 @@ processResources.apply {
     from(sourceSets["main"].resources.srcDirs) {
         include("mcmod.info")
         expand(mapOf("version" to modVersion,
-            "mcversion" to mcFullVersion))
+                "mcversion" to mcFullVersion))
     }
 
     // copy everything else, thats not the mcmod.info
@@ -163,8 +163,8 @@ val jar: Jar by tasks
 jar.apply {
     manifest {
         attributes(mapOf("FMLAT" to "gregtech_at.cfg",
-            "FMLCorePlugin" to "gregtech.common.asm.GTCELoadingPlugin",
-            "FMLCorePluginContainsFMLMod" to "true"))
+                "FMLCorePlugin" to "gregtech.common.asm.GTCELoadingPlugin",
+                "FMLCorePluginContainsFMLMod" to "true"))
     }
 }
 
@@ -196,7 +196,7 @@ artifacts {
 }
 
 fun Project.idea(configure: org.gradle.plugins.ide.idea.model.IdeaModel.() -> Unit): Unit =
-    (this as ExtensionAware).extensions.configure("idea", configure)
+        (this as ExtensionAware).extensions.configure("idea", configure)
 idea {
     module {
         inheritOutputDirs = true
@@ -324,28 +324,28 @@ fun getPrettyCommitDescription(commit: RevCommit): String {
     val closePattern = Regex("(Closes|Fixes) #[0-9]*\\.?")
     val author = commit.authorIdent.name
     val message = commit.fullMessage
-        //need to remove messages that close issues from changelog
-        .replace(closePattern, "")
-        //cut multiple newlines, format them all to linux line endings
-        .replace(Regex("(\r?\n){1,}"), "\n")
-        //cut squashed commit sub-commits descriptions
-        .replace(Regex("\\* [^\\n]*\\n"), "")
-        //split commit message on lines, trim each one
-        .split('\n').asSequence().map { it.trim() }
-        .filterNot { it.isBlank() }
-        //cut out lines that are related to merges
-        .filter { !it.startsWith("Merge remote-tracking branch") }
-        //cut lines that carry too little information
-        .filter { it.length > 3 }
-        //captialize each line, add . at the end if it's not there
-        .map { StringUtils.capitalize(it) }
-        .map { if (it.endsWith('.')) it.substring(0, it.length - 1) else it }
-        //append author to each line
-        .map { "* $it - $author" }.toList()
-    return message.joinToString( separator = "\n")
+            //need to remove messages that close issues from changelog
+            .replace(closePattern, "")
+            //cut multiple newlines, format them all to linux line endings
+            .replace(Regex("(\r?\n){1,}"), "\n")
+            //cut squashed commit sub-commits descriptions
+            .replace(Regex("\\* [^\\n]*\\n"), "")
+            //split commit message on lines, trim each one
+            .split('\n').asSequence().map { it.trim() }
+            .filterNot { it.isBlank() }
+            //cut out lines that are related to merges
+            .filter { !it.startsWith("Merge remote-tracking branch") }
+            //cut lines that carry too little information
+            .filter { it.length > 3 }
+            //captialize each line, add . at the end if it's not there
+            .map { StringUtils.capitalize(it) }
+            .map { if (it.endsWith('.')) it.substring(0, it.length - 1) else it }
+            //append author to each line
+            .map { "* $it - $author" }.toList()
+    return message.joinToString(separator = "\n")
 }
 
-fun getCommitFromTag(revWalk: RevWalk, tagObject: RevObject) : RevCommit? {
+fun getCommitFromTag(revWalk: RevWalk, tagObject: RevObject): RevCommit? {
     return when (tagObject) {
         is RevCommit -> tagObject
         is RevTag -> getCommitFromTag(revWalk, revWalk.parseAny(tagObject.`object`))
@@ -361,9 +361,9 @@ fun getActualTagName(tagName: String): String {
 fun getActualChangeList(): String {
     val revWalk = RevWalk(git.repository)
     val latestTagCommit = git.tagList().call()
-        .filter { getActualTagName(it.name).startsWith("v") }
-        .mapNotNull { getCommitFromTag(revWalk, revWalk.parseAny(it.objectId)) }
-        .maxBy { it.commitTime } ?: error("No previous release version tag found")
+            .filter { getActualTagName(it.name).startsWith("v") }
+            .mapNotNull { getCommitFromTag(revWalk, revWalk.parseAny(it.objectId)) }
+            .maxBy { it.commitTime } ?: error("No previous release version tag found")
 
     val gitLog = git.log()
     val headCommitId = git.repository.resolve(Constants.HEAD)
@@ -380,7 +380,7 @@ fun getBuildNumber(): String {
     return gitLog.call().toList().size.toString()
 }
 
-fun getVersionFromJava(file: File): String  {
+fun getVersionFromJava(file: File): String {
     var major = "0"
     var minor = "0"
     var revision = "0"
@@ -468,6 +468,11 @@ publishing {
             artifact(jar)
             artifact(sourceTask)
             artifact(energyApiTask)
+        }
+    }
+    repositories {
+        maven {
+            setUrl("${projectDir}/maven")
         }
     }
 }

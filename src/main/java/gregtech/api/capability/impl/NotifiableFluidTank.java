@@ -23,7 +23,7 @@ public class NotifiableFluidTank extends FluidTank implements INotifiableHandler
         super.onContentsChanged();
         for (MetaTileEntity metaTileEntity : notifiableEntities) {
             if (metaTileEntity != null && metaTileEntity.isValid()) {
-                notifyAll(metaTileEntity, this, isExport);
+                addToNotifiedList(metaTileEntity, this, isExport);
             }
         }
     }

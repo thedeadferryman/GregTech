@@ -32,15 +32,15 @@ import net.minecraftforge.items.ItemStackHandler;
 import javax.annotation.Nullable;
 import java.util.List;
 
-public class MetaTileEntityFluidHatch extends MetaTileEntityMultiblockPart implements IMultiblockAbilityPart<IFluidTank> {
+public class MetaTileEntityFluidHatch extends MetaTileEntityMultiblockNotifiablePart implements IMultiblockAbilityPart<IFluidTank> {
 
     private static final int INITIAL_INVENTORY_SIZE = 8000;
-    private ItemStackHandler containerInventory;
-    private FluidTank fluidTank;
-    private boolean isExportHatch;
+    private final ItemStackHandler containerInventory;
+    private final FluidTank fluidTank;
+    private final boolean isExportHatch;
 
     public MetaTileEntityFluidHatch(ResourceLocation metaTileEntityId, int tier, boolean isExportHatch) {
-        super(metaTileEntityId, tier);
+        super(metaTileEntityId, tier, isExportHatch);
         this.containerInventory = new ItemStackHandler(2);
         this.isExportHatch = isExportHatch;
         this.fluidTank = new FluidTank(getInventorySize());

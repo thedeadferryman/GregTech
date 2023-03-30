@@ -3,6 +3,7 @@ package gregtech.common.metatileentities.electric.multiblockpart;
 import codechicken.lib.render.CCRenderState;
 import codechicken.lib.render.pipeline.IVertexOperation;
 import codechicken.lib.vec.Matrix4;
+import gregtech.api.capability.impl.NotifiableItemStackHandler;
 import gregtech.api.gui.GuiTextures;
 import gregtech.api.gui.ModularUI;
 import gregtech.api.gui.ModularUI.Builder;
@@ -24,13 +25,13 @@ import net.minecraftforge.items.ItemStackHandler;
 import javax.annotation.Nullable;
 import java.util.List;
 
-public class MetaTileEntityItemBus extends MetaTileEntityMultiblockPart implements IMultiblockAbilityPart<IItemHandlerModifiable> {
+public class MetaTileEntityItemBus extends MetaTileEntityMultiblockNotifiablePart implements IMultiblockAbilityPart<IItemHandlerModifiable> {
 
     private static final int[] INVENTORY_SIZES = {1, 4, 9, 16, 25, 36, 49};
     private final boolean isExportHatch;
 
     public MetaTileEntityItemBus(ResourceLocation metaTileEntityId, int tier, boolean isExportHatch) {
-        super(metaTileEntityId, tier);
+        super(metaTileEntityId, tier, isExportHatch);
         this.isExportHatch = isExportHatch;
         initializeInventory();
     }
@@ -68,14 +69,15 @@ public class MetaTileEntityItemBus extends MetaTileEntityMultiblockPart implemen
         return sizeRoot * sizeRoot;
     }
 
+
     @Override
     protected IItemHandlerModifiable createExportItemHandler() {
-        return isExportHatch ? new ItemStackHandler(getInventorySize()) : new ItemStackHandler(0);
+        return isExportHatch ? new NotifiableItemStackHandler(getInventorySize(), getController(), true) : new ItemStackHandler(0);
     }
 
     @Override
     protected IItemHandlerModifiable createImportItemHandler() {
-        return isExportHatch ? new ItemStackHandler(0) : new ItemStackHandler(getInventorySize());
+        return isExportHatch ? new ItemStackHandler(0) : new NotifiableItemStackHandler(getInventorySize(), getController(), false);
     }
 
     @Override
@@ -97,11 +99,11 @@ public class MetaTileEntityItemBus extends MetaTileEntityMultiblockPart implemen
 
     private ModularUI.Builder createUITemplate(EntityPlayer player, int rowSize, int xOffset) {
         Builder builder = ModularUI.builder(GuiTextures.BACKGROUND, 176 + xOffset * 2,
-                18 + 18 * rowSize + 94)
+                        18 + 18 * rowSize + 94)
                 .label(10, 5, getMetaFullName());
 
         for (int y = 0; y < rowSize; y++) {
-            for (int x = 0; x < rowSize; x ++) {
+            for (int x = 0; x < rowSize; x++) {
                 int index = y * rowSize + x;
                 builder.widget(new SlotWidget(isExportHatch ? exportItems : importItems, index,
                         (88 - rowSize * 9 + x * 18) + xOffset, 18 + y * 18, true, !isExportHatch)

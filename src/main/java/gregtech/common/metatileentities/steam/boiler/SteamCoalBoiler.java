@@ -4,6 +4,7 @@ import gregtech.api.capability.GregtechCapabilities;
 import gregtech.api.capability.IFuelInfo;
 import gregtech.api.capability.IFuelable;
 import gregtech.api.capability.impl.ItemFuelInfo;
+import gregtech.api.capability.impl.NotifiableItemStackHandler;
 import gregtech.api.gui.ModularUI;
 import gregtech.api.gui.widgets.ProgressWidget;
 import gregtech.api.gui.widgets.ProgressWidget.MoveType;
@@ -52,7 +53,7 @@ public class SteamCoalBoiler extends SteamBoiler implements IFuelable {
 
     @Override
     public IItemHandlerModifiable createExportItemHandler() {
-        return new ItemStackHandler(1);
+        return new NotifiableItemStackHandler(1, this, true);
     }
 
     @Override

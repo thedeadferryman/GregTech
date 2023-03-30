@@ -9,6 +9,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import gregtech.api.GTValues;
 import gregtech.api.capability.impl.ItemHandlerProxy;
+import gregtech.api.capability.impl.NotifiableItemStackHandler;
 import gregtech.api.gui.GuiTextures;
 import gregtech.api.gui.ModularUI;
 import gregtech.api.gui.widgets.ProgressWidget.MoveType;
@@ -44,16 +45,15 @@ import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.MathHelper;
 import net.minecraftforge.common.util.Constants.NBT;
 import net.minecraftforge.items.IItemHandlerModifiable;
-import net.minecraftforge.items.ItemHandlerHelper;
 import net.minecraftforge.items.ItemStackHandler;
-
-import static gregtech.api.util.InventoryUtils.simulateItemStackMerge;
 
 import javax.annotation.Nonnull;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+
+import static gregtech.api.util.InventoryUtils.simulateItemStackMerge;
 
 public class MetaTileEntityPrimitiveBlastFurnace extends MultiblockControllerBase {
 
@@ -374,7 +374,7 @@ public class MetaTileEntityPrimitiveBlastFurnace extends MultiblockControllerBas
 
     @Override
     protected IItemHandlerModifiable createExportItemHandler() {
-        return new ItemStackHandler(2);
+        return new NotifiableItemStackHandler(2, this, true);
     }
 
     @Override

@@ -4,6 +4,8 @@ import codechicken.lib.render.CCRenderState;
 import codechicken.lib.render.pipeline.IVertexOperation;
 import codechicken.lib.vec.Matrix4;
 import gregtech.api.capability.impl.FluidTankList;
+import gregtech.api.capability.impl.NotifiableFluidTank;
+import gregtech.api.capability.impl.NotifiableItemStackHandler;
 import gregtech.api.gui.GuiTextures;
 import gregtech.api.gui.ModularUI;
 import gregtech.api.gui.widgets.ProgressWidget.MoveType;
@@ -31,12 +33,10 @@ import net.minecraft.util.EnumFacing;
 import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.fluids.FluidStack;
-import net.minecraftforge.fluids.FluidTank;
 import net.minecraftforge.fluids.capability.CapabilityFluidHandler;
 import net.minecraftforge.items.CapabilityItemHandler;
 import net.minecraftforge.items.IItemHandlerModifiable;
 import net.minecraftforge.items.ItemHandlerHelper;
-import net.minecraftforge.items.ItemStackHandler;
 
 import java.util.function.Predicate;
 
@@ -54,6 +54,12 @@ public class MetaTileEntityCokeOven extends MultiblockControllerBase {
 
     public MetaTileEntityCokeOven(ResourceLocation metaTileEntityId) {
         super(metaTileEntityId);
+    }
+
+    private static boolean areItemStacksEqual(ItemStack stackA, ItemStack stackB) {
+        return (stackA.isEmpty() && stackB.isEmpty()) ||
+                (ItemStack.areItemsEqual(stackA, stackB) &&
+                        ItemStack.areItemStackTagsEqual(stackA, stackB));
     }
 
     @Override
@@ -86,13 +92,13 @@ public class MetaTileEntityCokeOven extends MultiblockControllerBase {
     private CokeOvenRecipe getOrRefreshRecipe(ItemStack inputStack) {
         CokeOvenRecipe currentRecipe = null;
         if (previousRecipe != null &&
-            previousRecipe.getInput().getIngredient().apply(inputStack)) {
+                previousRecipe.getInput().getIngredient().apply(inputStack)) {
             currentRecipe = previousRecipe;
         } else if (!areItemStacksEqual(inputStack, lastInputStack)) {
             this.lastInputStack = inputStack.isEmpty() ? ItemStack.EMPTY : inputStack.copy();
             currentRecipe = RecipeMaps.COKE_OVEN_RECIPES.stream()
-                .filter(it -> it.getInput().getIngredient().test(inputStack))
-                .findFirst().orElse(null);
+                    .filter(it -> it.getInput().getIngredient().test(inputStack))
+                    .findFirst().orElse(null);
             if (currentRecipe != null) {
                 this.previousRecipe = currentRecipe;
             }
@@ -100,16 +106,10 @@ public class MetaTileEntityCokeOven extends MultiblockControllerBase {
         return currentRecipe;
     }
 
-    private static boolean areItemStacksEqual(ItemStack stackA, ItemStack stackB) {
-        return (stackA.isEmpty() && stackB.isEmpty()) ||
-            (ItemStack.areItemsEqual(stackA, stackB) &&
-                ItemStack.areItemStackTagsEqual(stackA, stackB));
-    }
-
     private boolean setupRecipe(ItemStack inputStack, CokeOvenRecipe recipe) {
         return inputStack.getCount() >= recipe.getInput().getCount() &&
-            ItemHandlerHelper.insertItemStacked(exportItems, recipe.getOutput(), true).isEmpty() &&
-            exportFluids.fill(recipe.getFluidOutput(), false) == recipe.getFluidOutput().amount;
+                ItemHandlerHelper.insertItemStacked(exportItems, recipe.getOutput(), true).isEmpty() &&
+                exportFluids.fill(recipe.getFluidOutput(), false) == recipe.getFluidOutput().amount;
     }
 
     private boolean tryPickNewRecipe() {
@@ -179,16 +179,16 @@ public class MetaTileEntityCokeOven extends MultiblockControllerBase {
         }
     }
 
+    public boolean isActive() {
+        return isActive;
+    }
+
     public void setActive(boolean active) {
         this.isActive = active;
         if (!getWorld().isRemote) {
             writeCustomData(100, b -> b.writeBoolean(isActive));
             getWorld().checkLight(getPos());
         }
-    }
-
-    public boolean isActive() {
-        return isActive;
     }
 
     @Override
@@ -218,7 +218,7 @@ public class MetaTileEntityCokeOven extends MultiblockControllerBase {
     @Override
     public <T> T getCapability(Capability<T> capability, EnumFacing side) {
         if (capability == CapabilityItemHandler.ITEM_HANDLER_CAPABILITY ||
-            capability == CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY) {
+                capability == CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY) {
             return null;
         }
         return super.getCapability(capability, side);
@@ -226,31 +226,31 @@ public class MetaTileEntityCokeOven extends MultiblockControllerBase {
 
     @Override
     protected IItemHandlerModifiable createImportItemHandler() {
-        return new ItemStackHandler(1);
+        return new NotifiableItemStackHandler(1, this, false);
     }
 
     @Override
     protected IItemHandlerModifiable createExportItemHandler() {
-        return new ItemStackHandler(1);
+        return new NotifiableItemStackHandler(1, this, true);
     }
 
     @Override
     protected FluidTankList createExportFluidHandler() {
-        return new FluidTankList(false, new FluidTank(32000));
+        return new FluidTankList(false, new NotifiableFluidTank(32000, this, true));
     }
 
     @Override
     protected BlockPattern createStructurePattern() {
         Predicate<BlockWorldState> hatchPredicate = tilePredicate((state, tile) -> tile instanceof MetaTileEntityCokeOvenHatch);
         return FactoryBlockPattern.start()
-            .aisle("XXX", "XZX", "XXX")
-            .aisle("XZX", "Z#Z", "XZX")
-            .aisle("XXX", "XYX", "XXX")
-            .where('Z', statePredicate(getCasingState()).or(hatchPredicate))
-            .where('X', statePredicate(getCasingState()))
-            .where('#', isAirPredicate())
-            .where('Y', selfPredicate())
-            .build();
+                .aisle("XXX", "XZX", "XXX")
+                .aisle("XZX", "Z#Z", "XZX")
+                .aisle("XXX", "XYX", "XXX")
+                .where('Z', statePredicate(getCasingState()).or(hatchPredicate))
+                .where('X', statePredicate(getCasingState()))
+                .where('#', isAirPredicate())
+                .where('Y', selfPredicate())
+                .build();
     }
 
     @Override
@@ -261,16 +261,16 @@ public class MetaTileEntityCokeOven extends MultiblockControllerBase {
     @Override
     protected ModularUI createUI(EntityPlayer entityPlayer) {
         return ModularUI.builder(GuiTextures.BACKGROUND, 176, 166)
-            .widget(new SlotWidget(importItems, 0, 33, 30, true, true)
-                .setBackgroundTexture(GuiTextures.SLOT, GuiTextures.FURNACE_OVERLAY))
-            .progressBar(this::getProgressScaled, 58, 30, 20, 15, GuiTextures.BRONZE_BLAST_FURNACE_PROGRESS_BAR, MoveType.HORIZONTAL)
-            .widget(new SlotWidget(exportItems, 0, 85, 30, true, false)
-                .setBackgroundTexture(GuiTextures.SLOT, GuiTextures.FURNACE_OVERLAY))
-            .widget(new TankWidget(exportFluids.getTankAt(0), 133, 13, 20, 58)
-                .setBackgroundTexture(GuiTextures.FLUID_TANK_BACKGROUND)
-                .setOverlayTexture(GuiTextures.FLUID_TANK_OVERLAY)
-                .setContainerClicking(true, false))
-            .bindPlayerInventory(entityPlayer.inventory, GuiTextures.SLOT)
-            .build(getHolder(), entityPlayer);
+                .widget(new SlotWidget(importItems, 0, 33, 30, true, true)
+                        .setBackgroundTexture(GuiTextures.SLOT, GuiTextures.FURNACE_OVERLAY))
+                .progressBar(this::getProgressScaled, 58, 30, 20, 15, GuiTextures.BRONZE_BLAST_FURNACE_PROGRESS_BAR, MoveType.HORIZONTAL)
+                .widget(new SlotWidget(exportItems, 0, 85, 30, true, false)
+                        .setBackgroundTexture(GuiTextures.SLOT, GuiTextures.FURNACE_OVERLAY))
+                .widget(new TankWidget(exportFluids.getTankAt(0), 133, 13, 20, 58)
+                        .setBackgroundTexture(GuiTextures.FLUID_TANK_BACKGROUND)
+                        .setOverlayTexture(GuiTextures.FLUID_TANK_OVERLAY)
+                        .setContainerClicking(true, false))
+                .bindPlayerInventory(entityPlayer.inventory, GuiTextures.SLOT)
+                .build(getHolder(), entityPlayer);
     }
 }

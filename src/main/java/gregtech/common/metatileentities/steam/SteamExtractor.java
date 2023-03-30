@@ -1,5 +1,6 @@
 package gregtech.common.metatileentities.steam;
 
+import gregtech.api.capability.impl.NotifiableItemStackHandler;
 import gregtech.api.gui.ModularUI;
 import gregtech.api.gui.widgets.ProgressWidget;
 import gregtech.api.gui.widgets.SlotWidget;
@@ -11,7 +12,6 @@ import gregtech.api.render.Textures;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.items.IItemHandlerModifiable;
-import net.minecraftforge.items.ItemStackHandler;
 
 public class SteamExtractor extends SteamMetaTileEntity {
 
@@ -26,25 +26,25 @@ public class SteamExtractor extends SteamMetaTileEntity {
 
     @Override
     public IItemHandlerModifiable createImportItemHandler() {
-        return new ItemStackHandler(1);
+        return new NotifiableItemStackHandler(1, this, false);
     }
 
     @Override
     public IItemHandlerModifiable createExportItemHandler() {
-        return new ItemStackHandler(1);
+        return new NotifiableItemStackHandler(1, this, true);
     }
 
     @Override
     public ModularUI createUI(EntityPlayer player) {
         return createUITemplate(player)
-            .widget(new SlotWidget(this.importItems, 0, 53, 25)
-                .setBackgroundTexture(BRONZE_SLOT_BACKGROUND_TEXTURE, getFullGuiTexture("slot_%s_extractor_background")))
-            .widget(new ProgressWidget(workableHandler::getProgressPercent, 78, 24, 20, 18)
-                .setProgressBar(getFullGuiTexture("progress_bar_%s_extractor"),
-                    getFullGuiTexture("progress_bar_%s_extractor_filled"),
-                    ProgressWidget.MoveType.HORIZONTAL))
-            .widget(new SlotWidget(this.exportItems, 0, 107, 25, true, false)
-                .setBackgroundTexture(BRONZE_SLOT_BACKGROUND_TEXTURE))
-            .build(getHolder(), player);
+                .widget(new SlotWidget(this.importItems, 0, 53, 25)
+                        .setBackgroundTexture(BRONZE_SLOT_BACKGROUND_TEXTURE, getFullGuiTexture("slot_%s_extractor_background")))
+                .widget(new ProgressWidget(workableHandler::getProgressPercent, 78, 24, 20, 18)
+                        .setProgressBar(getFullGuiTexture("progress_bar_%s_extractor"),
+                                getFullGuiTexture("progress_bar_%s_extractor_filled"),
+                                ProgressWidget.MoveType.HORIZONTAL))
+                .widget(new SlotWidget(this.exportItems, 0, 107, 25, true, false)
+                        .setBackgroundTexture(BRONZE_SLOT_BACKGROUND_TEXTURE))
+                .build(getHolder(), player);
     }
 }
