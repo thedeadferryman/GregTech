@@ -63,37 +63,109 @@ public abstract class MetaTileEntity implements ICoverable {
     public static final int DEFAULT_PAINTING_COLOR = 0xFFFFFF;
     public static final IndexedCuboid6 FULL_CUBE_COLLISION = new IndexedCuboid6(null, Cuboid6.full);
     public static final String TAG_KEY_PAINTING_COLOR = "PaintingColor";
+
     public static final String TAG_KEY_FRAGILE = "Fragile";
 
     public final ResourceLocation metaTileEntityId;
-    MetaTileEntityHolder holder;
-
-    protected IItemHandlerModifiable importItems;
-    protected IItemHandlerModifiable exportItems;
-
-    protected IItemHandler itemInventory;
-
-    protected FluidTankList importFluids;
-    protected FluidTankList exportFluids;
-
-    protected IFluidHandler fluidInventory;
-
-    protected List<MTETrait> mteTraits = new ArrayList<>();
-
-    protected EnumFacing frontFacing = EnumFacing.NORTH;
-    protected int paintingColor = DEFAULT_PAINTING_COLOR;
-
     private final int[] sidedRedstoneOutput = new int[6];
     private final int[] sidedRedstoneInput = new int[6];
+    private final CoverBehavior[] coverBehaviors = new CoverBehavior[6];
+    protected IItemHandlerModifiable importItems;
+    protected IItemHandlerModifiable exportItems;
+    protected List<IItemHandlerModifiable> notifiedInputItems = new ArrayList<>();
+    protected List<IItemHandlerModifiable> notifiedOutputItems = new ArrayList<>();
+    protected List<IFluidHandler> notifiedInputFluids = new ArrayList<>();
+    protected List<IFluidHandler> notifiedOutputFluids = new ArrayList<>();
+    protected IItemHandler itemInventory;
+    protected FluidTankList importFluids;
+    protected FluidTankList exportFluids;
+    protected IFluidHandler fluidInventory;
+    protected List<MTETrait> mteTraits = new ArrayList<>();
+    protected EnumFacing frontFacing = EnumFacing.NORTH;
+    protected int paintingColor = DEFAULT_PAINTING_COLOR;
+    protected boolean isFragile = false;
+    /**
+     * ItemStack currently being rendered by this meta tile entity
+     * Use this to obtain itemstack-specific data like contained fluid, painting color
+     * Generally useful in combination with {@link #writeItemStackData(net.minecraft.nbt.NBTTagCompound)}
+     */
+    @SideOnly(Side.CLIENT)
+    protected ItemStack renderContextStack;
+    MetaTileEntityHolder holder;
     private int cachedComparatorValue;
     private int cachedLightValue;
-    protected boolean isFragile = false;
-
-    private final CoverBehavior[] coverBehaviors = new CoverBehavior[6];
 
     public MetaTileEntity(ResourceLocation metaTileEntityId) {
         this.metaTileEntityId = metaTileEntityId;
         initializeInventory();
+    }
+
+    protected static void moveInventoryItems(IItemHandler sourceInventory, IItemHandler targetInventory) {
+        for (int srcIndex = 0; srcIndex < sourceInventory.getSlots(); srcIndex++) {
+            ItemStack sourceStack = sourceInventory.extractItem(srcIndex, Integer.MAX_VALUE, true);
+            if (sourceStack.isEmpty()) {
+                continue;
+            }
+            ItemStack remainder = ItemHandlerHelper.insertItemStacked(targetInventory, sourceStack, true);
+            int amountToInsert = sourceStack.getCount() - remainder.getCount();
+            if (amountToInsert > 0) {
+                sourceStack = sourceInventory.extractItem(srcIndex, amountToInsert, false);
+                ItemHandlerHelper.insertItemStacked(targetInventory, sourceStack, false);
+            }
+        }
+    }
+
+    /**
+     * Simulates the insertion of items into a target inventory, then optionally performs the insertion.
+     * <br /><br />
+     * Simulating will not modify any of the input parameters. Insertion will either succeed completely, or fail
+     * without modifying anything.
+     *
+     * @param handler  the target inventory
+     * @param simulate whether to simulate ({@code true}) or actually perform the insertion ({@code false})
+     * @param items    the items to insert into {@code handler}.
+     * @return {@code true} if the insertion succeeded, {@code false} otherwise.
+     * @throws IllegalStateException if {@code handler} does not accept all items as expected while performing a
+     *                               real insertion. This should not be possible unless the handler is modified in
+     *                               another thread, or it does not behave in a manner conforming with the contract
+     *                               of {@link gregtech.api.util.InventoryUtils#simulateItemStackMerge simulateItemStackMerge}.
+     */
+    public static boolean addItemsToItemHandler(final IItemHandler handler,
+                                                final boolean simulate,
+                                                final List<ItemStack> items) {
+        // determine if there is sufficient room to insert all items into the target inventory
+        final boolean canMerge = simulateItemStackMerge(items, handler);
+
+        // if we're not simulating and the merge should succeed, perform the merge.
+        if (!simulate && canMerge)
+            items.forEach(stack -> {
+                ItemStack rest = ItemHandlerHelper.insertItemStacked(handler, stack, simulate);
+                if (!rest.isEmpty())
+                    throw new IllegalStateException(
+                            String.format("Insertion failed, remaining stack contained %d items.", rest.getCount()));
+            });
+
+        return canMerge;
+    }
+
+    public static boolean addFluidsToFluidHandler(IFluidHandler handler, boolean simulate, List<FluidStack> items) {
+        boolean filledAll = true;
+        for (FluidStack stack : items) {
+            int filled = handler.fill(stack, !simulate);
+            filledAll &= filled == stack.amount;
+            if (!filledAll && simulate) return false;
+        }
+        return filledAll;
+    }
+
+    public static void clearInventory(NonNullList<ItemStack> itemBuffer, IItemHandlerModifiable inventory) {
+        for (int i = 0; i < inventory.getSlots(); i++) {
+            ItemStack stackInSlot = inventory.getStackInSlot(i);
+            if (!stackInSlot.isEmpty()) {
+                inventory.setStackInSlot(i, ItemStack.EMPTY);
+                itemBuffer.add(stackInSlot);
+            }
+        }
     }
 
     protected void initializeInventory() {
@@ -120,6 +192,46 @@ public abstract class MetaTileEntity implements ICoverable {
         return holder == null ? null : holder.getPos();
     }
 
+    public List<IItemHandlerModifiable> getNotifiedInputItems() {
+        return notifiedInputItems;
+    }
+
+    public List<IItemHandlerModifiable> getNotifiedOutputItems() {
+        return notifiedOutputItems;
+    }
+
+    public List<IFluidHandler> getNotifiedInputFluids() {
+        return notifiedInputFluids;
+    }
+
+    public List<IFluidHandler> getNotifiedOutputFluids() {
+        return notifiedOutputFluids;
+    }
+
+    public <T> void addNotifiedInput(T input) {
+        if (input instanceof IItemHandlerModifiable) {
+            if (!notifiedInputItems.contains(input)) {
+                notifiedInputItems.add((IItemHandlerModifiable) input);
+            }
+        } else if (input instanceof IFluidHandler) {
+            if (!notifiedInputFluids.contains(input)) {
+                notifiedInputFluids.add((IFluidHandler) input);
+            }
+        }
+    }
+
+    public <T> void addNotifiedOutput(T input) {
+        if (input instanceof IItemHandlerModifiable) {
+            if (!notifiedOutputItems.contains(input)) {
+                notifiedOutputItems.add((IItemHandlerModifiable) input);
+            }
+        } else if (input instanceof IFluidHandler) {
+            if (!notifiedOutputFluids.contains(input)) {
+                notifiedOutputFluids.add((IFluidHandler) input);
+            }
+        }
+    }
+
     public void markDirty() {
         if (holder != null) {
             holder.markDirty();
@@ -127,12 +239,12 @@ public abstract class MetaTileEntity implements ICoverable {
     }
 
     /**
+     * @return Timer value, starting at zero.
      * @deprecated Use {@link MetaTileEntity#getOffsetTimer()} instead for
      * a better timer that spreads ticks more evenly.
-     *
+     * <p>
      * This method should only be used to check for first tick behavior, as
      * a comparison against zero.
-     * @return Timer value, starting at zero.
      */
     @Deprecated
     public long getTimer() {
@@ -141,6 +253,7 @@ public abstract class MetaTileEntity implements ICoverable {
 
     /**
      * Replacement for {@link MetaTileEntity#getTimer()}.
+     *
      * @return Timer value, starting at zero, with a random offset [0, 20).
      */
     public long getOffsetTimer() {
@@ -164,14 +277,6 @@ public abstract class MetaTileEntity implements ICoverable {
     public Pair<TextureAtlasSprite, Integer> getParticleTexture() {
         return Pair.of(TextureUtils.getMissingSprite(), 0xFFFFFF);
     }
-
-    /**
-     * ItemStack currently being rendered by this meta tile entity
-     * Use this to obtain itemstack-specific data like contained fluid, painting color
-     * Generally useful in combination with {@link #writeItemStackData(net.minecraft.nbt.NBTTagCompound)}
-     */
-    @SideOnly(Side.CLIENT)
-    protected ItemStack renderContextStack;
 
     @SideOnly(Side.CLIENT)
     public void setRenderContextStack(ItemStack itemStack) {
@@ -317,7 +422,7 @@ public abstract class MetaTileEntity implements ICoverable {
     public final boolean onCoverRightClick(EntityPlayer playerIn, EnumHand hand, CuboidRayTraceResult result) {
         CoverBehavior coverBehavior = getCoverAtSide(result.sideHit);
         EnumActionResult coverResult = coverBehavior == null ? EnumActionResult.PASS :
-            coverBehavior.onRightClick(playerIn, hand, result);
+                coverBehavior.onRightClick(playerIn, hand, result);
         if (coverResult != EnumActionResult.PASS) {
             return coverResult == EnumActionResult.SUCCESS;
         }
@@ -333,7 +438,7 @@ public abstract class MetaTileEntity implements ICoverable {
         EnumFacing coverSide = ICoverable.traceCoverSide(result);
         CoverBehavior coverBehavior = coverSide == null ? null : getCoverAtSide(coverSide);
         EnumActionResult coverResult = coverBehavior == null ? EnumActionResult.PASS :
-            accessingActiveOutputSide ? EnumActionResult.PASS : coverBehavior.onScrewdriverClick(playerIn, hand, result);
+                accessingActiveOutputSide ? EnumActionResult.PASS : coverBehavior.onScrewdriverClick(playerIn, hand, result);
         if (coverResult != EnumActionResult.PASS) {
             return coverResult == EnumActionResult.SUCCESS;
         }
@@ -498,7 +603,7 @@ public abstract class MetaTileEntity implements ICoverable {
         //so check both top cover and bottom cover
         if (side == null) {
             return canConnectRedstone(EnumFacing.UP) ||
-                canConnectRedstone(EnumFacing.DOWN);
+                    canConnectRedstone(EnumFacing.DOWN);
         }
         CoverBehavior coverBehavior = getCoverAtSide(side);
         if (coverBehavior == null) {
@@ -809,10 +914,10 @@ public abstract class MetaTileEntity implements ICoverable {
             return GregtechTileCapabilities.CAPABILITY_COVERABLE.cast(this);
         }
         if (capability == CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY &&
-            getFluidInventory().getTankProperties().length > 0) {
+                getFluidInventory().getTankProperties().length > 0) {
             return CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY.cast(getFluidInventory());
         } else if (capability == CapabilityItemHandler.ITEM_HANDLER_CAPABILITY &&
-            getItemInventory().getSlots() > 0) {
+                getItemInventory().getSlots() > 0) {
             return CapabilityItemHandler.ITEM_HANDLER_CAPABILITY.cast(getItemInventory());
         }
         T capabilityResult = null;
@@ -939,64 +1044,6 @@ public abstract class MetaTileEntity implements ICoverable {
         blockPos.release();
     }
 
-    protected static void moveInventoryItems(IItemHandler sourceInventory, IItemHandler targetInventory) {
-        for (int srcIndex = 0; srcIndex < sourceInventory.getSlots(); srcIndex++) {
-            ItemStack sourceStack = sourceInventory.extractItem(srcIndex, Integer.MAX_VALUE, true);
-            if (sourceStack.isEmpty()) {
-                continue;
-            }
-            ItemStack remainder = ItemHandlerHelper.insertItemStacked(targetInventory, sourceStack, true);
-            int amountToInsert = sourceStack.getCount() - remainder.getCount();
-            if (amountToInsert > 0) {
-                sourceStack = sourceInventory.extractItem(srcIndex, amountToInsert, false);
-                ItemHandlerHelper.insertItemStacked(targetInventory, sourceStack, false);
-            }
-        }
-    }
-
-    /**
-     * Simulates the insertion of items into a target inventory, then optionally performs the insertion.
-     * <br /><br />
-     * Simulating will not modify any of the input parameters. Insertion will either succeed completely, or fail
-     * without modifying anything.
-     *
-     * @param handler  the target inventory
-     * @param simulate whether to simulate ({@code true}) or actually perform the insertion ({@code false})
-     * @param items    the items to insert into {@code handler}.
-     * @return {@code true} if the insertion succeeded, {@code false} otherwise.
-     * @throws IllegalStateException if {@code handler} does not accept all items as expected while performing a
-     *                               real insertion. This should not be possible unless the handler is modified in
-     *                               another thread, or it does not behave in a manner conforming with the contract
-     *                               of {@link gregtech.api.util.InventoryUtils#simulateItemStackMerge simulateItemStackMerge}.
-     */
-    public static boolean addItemsToItemHandler(final IItemHandler handler,
-                                                final boolean simulate,
-                                                final List<ItemStack> items) {
-        // determine if there is sufficient room to insert all items into the target inventory
-        final boolean canMerge = simulateItemStackMerge(items, handler);
-
-        // if we're not simulating and the merge should succeed, perform the merge.
-        if (!simulate && canMerge)
-            items.forEach(stack -> {
-                ItemStack rest = ItemHandlerHelper.insertItemStacked(handler, stack, simulate);
-                if (!rest.isEmpty())
-                    throw new IllegalStateException(
-                        String.format("Insertion failed, remaining stack contained %d items.", rest.getCount()));
-            });
-
-        return canMerge;
-    }
-
-    public static boolean addFluidsToFluidHandler(IFluidHandler handler, boolean simulate, List<FluidStack> items) {
-        boolean filledAll = true;
-        for (FluidStack stack : items) {
-            int filled = handler.fill(stack, !simulate);
-            filledAll &= filled == stack.amount;
-            if (!filledAll && simulate) return false;
-        }
-        return filledAll;
-    }
-
     public final int getOutputRedstoneSignal(@Nullable EnumFacing side) {
         if (side == null) {
             return getHighestOutputRedstoneSignal();
@@ -1034,35 +1081,6 @@ public abstract class MetaTileEntity implements ICoverable {
     @Override
     public void scheduleRenderUpdate() {
         getHolder().scheduleChunkForRenderUpdate();
-    }
-
-    public void setFrontFacing(EnumFacing frontFacing) {
-        Preconditions.checkNotNull(frontFacing, "frontFacing");
-        this.frontFacing = frontFacing;
-        if (getWorld() != null && !getWorld().isRemote) {
-            getHolder().notifyBlockUpdate();
-            markDirty();
-            writeCustomData(-2, buf -> buf.writeByte(frontFacing.getIndex()));
-            mteTraits.forEach(trait -> trait.onFrontFacingSet(frontFacing));
-        }
-    }
-
-    public void setPaintingColor(int paintingColor) {
-        this.paintingColor = paintingColor;
-        if (getWorld() != null && !getWorld().isRemote) {
-            getHolder().notifyBlockUpdate();
-            markDirty();
-            writeCustomData(-3, buf -> buf.writeInt(paintingColor));
-        }
-    }
-
-    public void setFragile(boolean fragile) {
-        this.isFragile = fragile;
-        if (getWorld() != null && !getWorld().isRemote) {
-            getHolder().notifyBlockUpdate();
-            markDirty();
-            writeCustomData(-8, buf -> buf.writeBoolean(fragile));
-        }
     }
 
     public boolean isValidFrontFacing(EnumFacing facing) {
@@ -1159,16 +1177,6 @@ public abstract class MetaTileEntity implements ICoverable {
         clearInventory(itemBuffer, exportItems);
     }
 
-    public static void clearInventory(NonNullList<ItemStack> itemBuffer, IItemHandlerModifiable inventory) {
-        for (int i = 0; i < inventory.getSlots(); i++) {
-            ItemStack stackInSlot = inventory.getStackInSlot(i);
-            if (!stackInSlot.isEmpty()) {
-                inventory.setStackInSlot(i, ItemStack.EMPTY);
-                itemBuffer.add(stackInSlot);
-            }
-        }
-    }
-
     public void onAttached() {
     }
 
@@ -1184,9 +1192,29 @@ public abstract class MetaTileEntity implements ICoverable {
         return frontFacing;
     }
 
+    public void setFrontFacing(EnumFacing frontFacing) {
+        Preconditions.checkNotNull(frontFacing, "frontFacing");
+        this.frontFacing = frontFacing;
+        if (getWorld() != null && !getWorld().isRemote) {
+            getHolder().notifyBlockUpdate();
+            markDirty();
+            writeCustomData(-2, buf -> buf.writeByte(frontFacing.getIndex()));
+            mteTraits.forEach(trait -> trait.onFrontFacingSet(frontFacing));
+        }
+    }
+
     @Override
     public int getPaintingColor() {
         return paintingColor;
+    }
+
+    public void setPaintingColor(int paintingColor) {
+        this.paintingColor = paintingColor;
+        if (getWorld() != null && !getWorld().isRemote) {
+            getHolder().notifyBlockUpdate();
+            markDirty();
+            writeCustomData(-3, buf -> buf.writeInt(paintingColor));
+        }
     }
 
     public IItemHandler getItemInventory() {
@@ -1215,6 +1243,15 @@ public abstract class MetaTileEntity implements ICoverable {
 
     public boolean isFragile() {
         return isFragile;
+    }
+
+    public void setFragile(boolean fragile) {
+        this.isFragile = fragile;
+        if (getWorld() != null && !getWorld().isRemote) {
+            getHolder().notifyBlockUpdate();
+            markDirty();
+            writeCustomData(-8, buf -> buf.writeBoolean(fragile));
+        }
     }
 
     public boolean shouldDropWhenDestroyed() {
