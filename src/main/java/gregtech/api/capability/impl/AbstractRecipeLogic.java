@@ -10,8 +10,6 @@ import gregtech.api.recipes.Recipe;
 import gregtech.api.recipes.RecipeMap;
 import gregtech.api.util.GTUtility;
 import gregtech.common.ConfigHolder;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
@@ -196,10 +194,6 @@ public abstract class AbstractRecipeLogic extends MTETrait implements IWorkable 
             //if previous recipe still matches inputs, try to use it
             currentRecipe = previousRecipe;
         } else {
-            EntityPlayerSP player = Minecraft.getMinecraft().player;
-            if (player != null) {
-                player.sendChatMessage("searching recipe for " + getMetaTileEntity().metaTileEntityId.toString());
-            }
             boolean dirty = checkRecipeInputsDirty(importInventory, importFluids);
             if (dirty || forceRecipeRecheck) {
                 this.forceRecipeRecheck = false;
