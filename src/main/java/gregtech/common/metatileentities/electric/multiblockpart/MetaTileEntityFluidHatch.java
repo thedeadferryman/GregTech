@@ -4,6 +4,7 @@ import codechicken.lib.render.CCRenderState;
 import codechicken.lib.render.pipeline.IVertexOperation;
 import codechicken.lib.vec.Matrix4;
 import gregtech.api.capability.impl.FluidTankList;
+import gregtech.api.capability.impl.NotifiableFluidTank;
 import gregtech.api.gui.GuiTextures;
 import gregtech.api.gui.ModularUI;
 import gregtech.api.gui.ModularUI.Builder;
@@ -43,7 +44,7 @@ public class MetaTileEntityFluidHatch extends MetaTileEntityMultiblockNotifiable
         super(metaTileEntityId, tier, isExportHatch);
         this.containerInventory = new ItemStackHandler(2);
         this.isExportHatch = isExportHatch;
-        this.fluidTank = new FluidTank(getInventorySize());
+        this.fluidTank = new NotifiableFluidTank(getInventorySize(), this, isExportHatch);
         initializeInventory();
     }
 
